@@ -1,17 +1,13 @@
 # Cc Me! Plugin
 """Cc Me!"""
-version= "1.1"
 
-import datetime
 import re
 
 from genshi.builder import tag
 from genshi.filters import Transformer
 
-from trac.core import *
+from trac.core import Component, implements, TracError
 from trac.ticket import Ticket
-from trac.util.datefmt import utc
-from trac.util.presentation import captioned_button
 from trac.util.presentation import captioned_button
 from trac.util.translation import _
 from trac.web.api import IRequestHandler, ITemplateStreamFilter
@@ -24,7 +20,6 @@ class CcMe(Component):
     Trac plugin for handling a CC button without TICKET_CHGPROP perms
     """
 
-
     implements(IRequestHandler, ITemplateProvider, ITemplateStreamFilter)
 
     def __init__(self):
@@ -32,8 +27,11 @@ class CcMe(Component):
 
     # IRequestHandler methods
 
-    def match_request(self, req):
-
+    def match_request(self, req): # pylint: disable=no-self-use
+        """
+        Decide whether the given request `req` should be handled by this
+        component.
+        """
         if req.method == 'POST' and req.path_info == "/ccme":
             return True
 
@@ -41,6 +39,10 @@ class CcMe(Component):
 
 
     def process_request(self, req):
+        """
+        Handle the POST and add or remove the current user from Cc of the given
+        ticket.
+        """
         cclist = []
 
         # extract the ticket number from the request
@@ -50,13 +52,16 @@ class CcMe(Component):
             raise TracError(_("Could not parse ticket ID for Cc Me!"))
 
         if not req.perm.has_permission('TICKET_APPEND'):
-            add_warning(req, _("You do not have permission to Cc yourself to ticket #%d"), ticket_id)
+            add_warning(req,
+                        _("You do not have permission to Cc yourself to ticket #%d"),
+                        ticket_id)
             return self._redirect(req, ticket_id)
 
+        # pylint: disable=no-member
         ticket = Ticket(self.env, ticket_id)
 
         if len(ticket['cc']) > 0:
-            cclist = re.split(r'[;,\s]+', ticket['cc'])        
+            cclist = re.split(r'[;,\s]+', ticket['cc'])
 
         user = req.authname
         if user is None:
@@ -73,41 +78,45 @@ class CcMe(Component):
         ticket['cc'] = ', '.join(cclist)
 
         ticket.save_changes(author=user)
-        
+
         return self._redirect(req, ticket_id)
 
+    def _redirect(self, req, ticket_id): # pylint: disable=no-self-use
+        return req.redirect("%s/ticket/%s" % (req.base_path, ticket_id))
 
-    def _redirect(self, req, id):
-        return req.redirect("%s/ticket/%s" % (req.base_path, id))
-        
     # ITemplateStreamFilter methods
 
+    # pylint: disable=too-many-arguments, unused-argument
     def filter_stream(self, req, method, filename, stream, data):
+        """
+        Filter the ticket template and add the Cc Me! button next to the Cc
+        list.
+        """
         if filename == 'ticket.html':
             ticket = data.get('ticket')
             if ticket and ticket.exists and \
                     'TICKET_APPEND' in req.perm(ticket.resource):
-                filter = Transformer('//th[@id="h_cc"]')
-                stream |= filter.append(self._ccme_form(req, ticket, data))
-	    add_stylesheet(req, 'ccme/css/ccme.css')
+                transformer = Transformer('//th[@id="h_cc"]')
+                stream |= transformer.append(self._ccme_form(req, ticket, data))
+            add_stylesheet(req, 'ccme/css/ccme.css')
         return stream
 
-    def _ccme_form(self, req, ticket, data):
+    def _ccme_form(self, req, ticket, data): # pylint: disable=no-self-use
         return tag.form(
             tag.div(
                 tag.input(type="submit", name="ccme",
                           value=captioned_button(req, u'\u2709', _("Cc Me!")),
                           title=_("Add/remove yourself to/from the Cc list")),
                 tag.input(type="hidden", name='ticket', value=ticket.id),
-		class_="inlinebuttons"),
+                class_="inlinebuttons"),
             method="post", action=req.href('/ccme'))
 
     # ITemplateProvider methods
-    def get_templates_dirs(self):
+    def get_templates_dirs(self): # pylint: disable=no-self-use
         """Return a list of directories containing the provided templates."""
-	return []
+        return []
 
-    def get_htdocs_dirs(self):
+    def get_htdocs_dirs(self): # pylint: disable=no-self-use
         """Return a list of directories with static resources (such as style
         sheets, images, etc.)
 
@@ -120,4 +129,3 @@ class CcMe(Component):
         """
         from pkg_resources import resource_filename
         return [('ccme', resource_filename(__name__, 'htdocs'))]
-
