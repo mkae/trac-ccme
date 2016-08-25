@@ -1,0 +1,8 @@
+*.pyc
+CcMe.egg-info/PKG-INFO
+CcMe.egg-info/SOURCES.txt
+CcMe.egg-info/dependency_links.txt
+CcMe.egg-info/entry_points.txt
+CcMe.egg-info/top_level.txt
+build/
+dist/

@@ -1,0 +1,6 @@
+th#h_cc form, th#h_cc form div {
+	display: inline;
+}
+th#h_cc form div.inlinebuttons {
+	bottom: 0;
+}
